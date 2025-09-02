@@ -443,8 +443,9 @@ export default function AttendancePage() {
                       <DataTable
                         columns={adminColumns}
                         data={dateAttendance}
-                        searchColumn="employee"
+                        globalFilter={true}
                         searchPlaceholder="Search employees..."
+                        employees={employees}
                       />
                     ) : (
                       <div className="flex justify-center items-center py-8">

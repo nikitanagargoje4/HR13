@@ -76,7 +76,7 @@
       "email": "pk@yahoo.com",
       "firstName": "prajwal ",
       "lastName": "kadam",
-      "role": "manager",
+      "role": "employee",
       "departmentId": 6,
       "position": "testing",
       "phoneNumber": "8862008921",
@@ -89,7 +89,12 @@
         "employees.edit"
       ],
       "id": 9,
-      "joinDate": "2025-08-28T08:46:41.969Z"
+      "joinDate": "2025-08-28T08:46:41.969Z",
+      "photoUrl": "",
+      "bankAccountNumber": "",
+      "bankAccountHolderName": "",
+      "bankName": "",
+      "bankIFSCCode": ""
     },
     {
       "firstName": "vimal",
@@ -159,7 +164,8 @@
       "bankIFSCCode": "12345456",
       "bankAccountType": "salary",
       "id": 16,
-      "isActive": true
+      "isActive": true,
+      "gender": "female"
     }
   ],
   "departments": [
@@ -393,9 +399,9 @@
       "startDate": "2025-08-28T06:56:40.268Z",
       "endDate": "2025-08-29T06:56:40.268Z",
       "reason": "test8",
-      "status": "pending",
+      "status": "approved",
       "id": 8,
-      "approvedById": null,
+      "approvedById": 1,
       "createdAt": "2025-08-28T06:55:42.742Z"
     },
     {
@@ -452,6 +458,17 @@
       "id": 13,
       "approvedById": 1,
       "createdAt": "2025-08-28T08:52:36.795Z"
+    },
+    {
+      "userId": 9,
+      "type": "annual",
+      "startDate": "2025-09-03T18:30:00.000Z",
+      "endDate": "2025-09-05T18:30:00.000Z",
+      "reason": "test",
+      "status": "pending",
+      "id": 14,
+      "approvedById": null,
+      "createdAt": "2025-09-02T09:56:37.046Z"
     }
   ],
   "holidayRecords": [
@@ -462,11 +479,210 @@
       "id": 1
     }
   ],
-  "notifications": [],
+  "notifications": [
+    {
+      "userId": 1,
+      "type": "login",
+      "title": "Successful Login",
+      "message": "You have successfully logged in at 9/2/2025, 9:52:31 AM",
+      "isRead": true,
+      "id": 1,
+      "createdAt": "2025-09-02T09:52:31.337Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "leave_approved",
+      "title": "Leave Request Approved",
+      "message": "Your leave request from 8/28/2025 to 8/29/2025 has been approved.",
+      "isRead": true,
+      "relatedLeaveId": 8,
+      "relatedUserId": 1,
+      "id": 2,
+      "createdAt": "2025-09-02T09:54:04.994Z"
+    },
+    {
+      "userId": 1,
+      "type": "logout",
+      "title": "Logged Out",
+      "message": "You have successfully logged out at 9/2/2025, 9:54:39 AM",
+      "isRead": false,
+      "id": 3,
+      "createdAt": "2025-09-02T09:54:39.065Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "login",
+      "title": "Employee Login",
+      "message": "prajwal  kadam (manager) logged in at 9/2/2025, 9:54:49 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 5,
+      "createdAt": "2025-09-02T09:54:49.812Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 2,
+      "type": "login",
+      "title": "Employee Login",
+      "message": "prajwal  kadam (manager) logged in at 9/2/2025, 9:54:49 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 6,
+      "createdAt": "2025-09-02T09:54:49.848Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 9,
+      "type": "logout",
+      "title": "Logged Out",
+      "message": "You have successfully logged out at 9/2/2025, 9:55:59 AM",
+      "isRead": false,
+      "id": 7,
+      "createdAt": "2025-09-02T09:55:59.488Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "logout",
+      "title": "Employee Logout",
+      "message": "prajwal  kadam (employee) logged out at 9/2/2025, 9:55:59 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 8,
+      "createdAt": "2025-09-02T09:55:59.511Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 2,
+      "type": "logout",
+      "title": "Employee Logout",
+      "message": "prajwal  kadam (employee) logged out at 9/2/2025, 9:55:59 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 9,
+      "createdAt": "2025-09-02T09:55:59.597Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 9,
+      "type": "login",
+      "title": "Successful Login",
+      "message": "You have successfully logged in at 9/2/2025, 9:56:08 AM",
+      "isRead": false,
+      "id": 10,
+      "createdAt": "2025-09-02T09:56:08.841Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "login",
+      "title": "Employee Login",
+      "message": "prajwal  kadam (employee) logged in at 9/2/2025, 9:56:08 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 11,
+      "createdAt": "2025-09-02T09:56:08.851Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 2,
+      "type": "login",
+      "title": "Employee Login",
+      "message": "prajwal  kadam (employee) logged in at 9/2/2025, 9:56:08 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 12,
+      "createdAt": "2025-09-02T09:56:08.867Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 9,
+      "type": "leave_request",
+      "title": "Leave Request Submitted",
+      "message": "Your leave request from 9/3/2025 to 9/5/2025 has been submitted and is pending approval.",
+      "isRead": false,
+      "relatedLeaveId": 14,
+      "id": 13,
+      "createdAt": "2025-09-02T09:56:37.067Z",
+      "relatedUserId": null
+    },
+    {
+      "userId": 1,
+      "type": "leave_request",
+      "title": "New Leave Request",
+      "message": "prajwal  kadam has submitted a leave request from 9/3/2025 to 9/5/2025 for annual leave.",
+      "isRead": false,
+      "relatedLeaveId": 14,
+      "relatedUserId": 9,
+      "id": 14,
+      "createdAt": "2025-09-02T09:56:37.206Z"
+    },
+    {
+      "userId": 2,
+      "type": "leave_request",
+      "title": "New Leave Request",
+      "message": "prajwal  kadam has submitted a leave request from 9/3/2025 to 9/5/2025 for annual leave.",
+      "isRead": false,
+      "relatedLeaveId": 14,
+      "relatedUserId": 9,
+      "id": 15,
+      "createdAt": "2025-09-02T09:56:37.267Z"
+    },
+    {
+      "userId": 9,
+      "type": "logout",
+      "title": "Logged Out",
+      "message": "You have successfully logged out at 9/2/2025, 9:56:47 AM",
+      "isRead": false,
+      "id": 16,
+      "createdAt": "2025-09-02T09:56:47.300Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "logout",
+      "title": "Employee Logout",
+      "message": "prajwal  kadam (employee) logged out at 9/2/2025, 9:56:47 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 17,
+      "createdAt": "2025-09-02T09:56:47.312Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 2,
+      "type": "logout",
+      "title": "Employee Logout",
+      "message": "prajwal  kadam (employee) logged out at 9/2/2025, 9:56:47 AM",
+      "isRead": false,
+      "relatedUserId": 9,
+      "id": 18,
+      "createdAt": "2025-09-02T09:56:47.412Z",
+      "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "login",
+      "title": "Successful Login",
+      "message": "You have successfully logged in at 9/2/2025, 9:56:56 AM",
+      "isRead": false,
+      "id": 19,
+      "createdAt": "2025-09-02T09:56:56.618Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
+    }
+  ],
   "currentUserId": 17,
   "currentDepartmentId": 9,
   "currentAttendanceId": 13,
-  "currentLeaveRequestId": 14,
+  "currentLeaveRequestId": 15,
   "currentHolidayId": 2,
-  "currentNotificationId": 1
+  "currentNotificationId": 20
 }

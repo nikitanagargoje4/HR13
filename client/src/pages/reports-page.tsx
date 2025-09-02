@@ -68,7 +68,7 @@ export default function ReportsPage() {
   });
 
   // Fetch report data
-  const { data: reportData = [], isLoading } = useQuery({
+  const { data: reportData = [], isLoading } = useQuery<any[]>({
     queryKey: [
       `/api/reports/${reportType}`, 
       { 
@@ -97,20 +97,20 @@ export default function ReportsPage() {
       const dateStr = format(date, 'MM-dd');
       
       // Calculate attendance metrics
-      const dayData = reportData.filter(entry => 
-        format(new Date(entry.records[0].date), 'MM-dd') === dateStr
+      const dayData = reportData.filter((entry: any) => 
+        entry.records?.[0]?.date && format(new Date(entry.records[0].date), 'MM-dd') === dateStr
       );
       
-      const present = dayData.filter(entry => 
-        entry.records.some(record => record.status === 'present')
+      const present = dayData.filter((entry: any) => 
+        entry.records?.some((record: any) => record.status === 'present')
       ).length;
       
-      const absent = dayData.filter(entry => 
-        entry.records.some(record => record.status === 'absent')
+      const absent = dayData.filter((entry: any) => 
+        entry.records?.some((record: any) => record.status === 'absent')
       ).length;
       
-      const late = dayData.filter(entry => 
-        entry.records.some(record => 
+      const late = dayData.filter((entry: any) => 
+        entry.records?.some((record: any) => 
           record.status === 'present' && 
           new Date(record.checkInTime).getHours() >= 9 && 
           new Date(record.checkInTime).getMinutes() > 0
@@ -139,8 +139,8 @@ export default function ReportsPage() {
       other: 0,
     };
 
-    reportData.forEach(entry => {
-      entry.leaveRequests.forEach(request => {
+    reportData.forEach((entry: any) => {
+      entry.leaveRequests?.forEach((request: any) => {
         if (request.status === 'approved') {
           leaveTypeCounts[request.type as keyof typeof leaveTypeCounts] += 1;
         }
@@ -172,7 +172,7 @@ export default function ReportsPage() {
       accessorKey: "present",
       header: "Present Days",
       cell: ({ row }) => {
-        const presentDays = row.original.records.filter(r => r.status === 'present').length;
+        const presentDays = row.original.records?.filter((r: any) => r.status === 'present').length || 0;
         return presentDays;
       },
     },
@@ -180,7 +180,7 @@ export default function ReportsPage() {
       accessorKey: "absent",
       header: "Absent Days",
       cell: ({ row }) => {
-        const absentDays = row.original.records.filter(r => r.status === 'absent').length;
+        const absentDays = row.original.records?.filter((r: any) => r.status === 'absent').length || 0;
         return absentDays;
       },
     },
@@ -188,12 +188,12 @@ export default function ReportsPage() {
       accessorKey: "late",
       header: "Late Days",
       cell: ({ row }) => {
-        const lateDays = row.original.records.filter(r => 
+        const lateDays = row.original.records?.filter((r: any) => 
           r.status === 'present' && 
           r.checkInTime &&
           new Date(r.checkInTime).getHours() >= 9 && 
           new Date(r.checkInTime).getMinutes() > 0
-        ).length;
+        ).length || 0;
         return lateDays;
       },
     },
@@ -202,13 +202,13 @@ export default function ReportsPage() {
       header: "Avg. Check In",
       cell: ({ row }) => {
         const checkIns = row.original.records
-          .filter(r => r.checkInTime)
-          .map(r => new Date(r.checkInTime));
+          ?.filter((r: any) => r.checkInTime)
+          ?.map((r: any) => new Date(r.checkInTime)) || [];
         
         if (checkIns.length === 0) return "N/A";
         
         const avgTime = new Date(
-          checkIns.reduce((sum, time) => sum + time.getTime(), 0) / checkIns.length
+          checkIns.reduce((sum: number, time: Date) => sum + time.getTime(), 0) / checkIns.length
         );
         
         return format(avgTime, 'hh:mm a');
@@ -235,9 +235,9 @@ export default function ReportsPage() {
       accessorKey: "annualLeave",
       header: "Annual Leave",
       cell: ({ row }) => {
-        const annualLeaves = row.original.leaveRequests.filter(r => 
+        const annualLeaves = row.original.leaveRequests?.filter((r: any) => 
           r.type === 'annual' && r.status === 'approved'
-        );
+        ) || [];
         return annualLeaves.length;
       },
     },
@@ -245,9 +245,9 @@ export default function ReportsPage() {
       accessorKey: "sickLeave",
       header: "Sick Leave",
       cell: ({ row }) => {
-        const sickLeaves = row.original.leaveRequests.filter(r => 
+        const sickLeaves = row.original.leaveRequests?.filter((r: any) => 
           r.type === 'sick' && r.status === 'approved'
-        );
+        ) || [];
         return sickLeaves.length;
       },
     },
@@ -255,9 +255,9 @@ export default function ReportsPage() {
       accessorKey: "unpaidLeave",
       header: "Unpaid Leave",
       cell: ({ row }) => {
-        const unpaidLeaves = row.original.leaveRequests.filter(r => 
+        const unpaidLeaves = row.original.leaveRequests?.filter((r: any) => 
           r.type === 'unpaid' && r.status === 'approved'
-        );
+        ) || [];
         return unpaidLeaves.length;
       },
     },
@@ -265,8 +265,8 @@ export default function ReportsPage() {
       accessorKey: "totalDays",
       header: "Total Days",
       cell: ({ row }) => {
-        const approvedLeaves = row.original.leaveRequests.filter(r => r.status === 'approved');
-        const totalDays = approvedLeaves.reduce((sum, leave) => {
+        const approvedLeaves = row.original.leaveRequests?.filter((r: any) => r.status === 'approved') || [];
+        const totalDays = approvedLeaves.reduce((sum: number, leave: any) => {
           const start = new Date(leave.startDate);
           const end = new Date(leave.endDate);
           const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;

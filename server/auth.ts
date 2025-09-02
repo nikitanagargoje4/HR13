@@ -153,7 +153,7 @@ export function setupAuth(app: Express) {
       req.login(user, async (err) => {
         if (err) return next(err);
         
-        // Create login notification
+        // Create login notification for user
         try {
           await storage.createNotification({
             userId: user.id,
@@ -162,6 +162,21 @@ export function setupAuth(app: Express) {
             message: `You have successfully logged in at ${new Date().toLocaleString()}`,
             isRead: false
           });
+          
+          // Notify admins about employee login (except for admin/hr logins)
+          if (user.role === 'employee' || user.role === 'manager') {
+            const adminUsers = await storage.getAdminUsers();
+            for (const admin of adminUsers) {
+              await storage.createNotification({
+                userId: admin.id,
+                type: 'login',
+                title: 'Employee Login',
+                message: `${user.firstName} ${user.lastName} (${user.role}) logged in at ${new Date().toLocaleString()}`,
+                isRead: false,
+                relatedUserId: user.id
+              });
+            }
+          }
         } catch (notificationError) {
           console.error('Failed to create login notification:', notificationError);
         }
@@ -188,6 +203,21 @@ export function setupAuth(app: Express) {
             message: `You have successfully logged out at ${new Date().toLocaleString()}`,
             isRead: false
           });
+          
+          // Notify admins about employee logout (except for admin/hr logouts)
+          if (user.role === 'employee' || user.role === 'manager') {
+            const adminUsers = await storage.getAdminUsers();
+            for (const admin of adminUsers) {
+              await storage.createNotification({
+                userId: admin.id,
+                type: 'logout',
+                title: 'Employee Logout',
+                message: `${user.firstName} ${user.lastName} (${user.role}) logged out at ${new Date().toLocaleString()}`,
+                isRead: false,
+                relatedUserId: user.id
+              });
+            }
+          }
         } catch (notificationError) {
           console.error('Failed to create logout notification:', notificationError);
         }

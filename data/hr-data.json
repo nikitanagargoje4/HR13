@@ -382,9 +382,9 @@
       "startDate": "2025-08-28T06:56:28.706Z",
       "endDate": "2025-08-29T06:56:28.706Z",
       "reason": "test7",
-      "status": "pending",
+      "status": "approved",
       "id": 7,
-      "approvedById": null,
+      "approvedById": 1,
       "createdAt": "2025-08-28T06:55:34.678Z"
     },
     {
@@ -462,10 +462,11 @@
       "id": 1
     }
   ],
+  "notifications": [],
   "currentUserId": 17,
   "currentDepartmentId": 9,
   "currentAttendanceId": 13,
   "currentLeaveRequestId": 14,
   "currentHolidayId": 2,
-  "currentNotificationId": null
+  "currentNotificationId": 1
 }

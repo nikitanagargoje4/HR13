@@ -265,6 +265,10 @@ export class FileStorage implements IStorage {
     return this.data.users.filter(u => u.departmentId === departmentId);
   }
 
+  async getAdminUsers(): Promise<User[]> {
+    return this.data.users.filter(u => u.role === 'admin' || u.role === 'hr');
+  }
+
   // Department methods
   async getDepartment(id: number): Promise<Department | undefined> {
     return this.data.departments.find(d => d.id === id);

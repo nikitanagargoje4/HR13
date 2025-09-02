@@ -439,12 +439,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         await storage.createNotification({
           userId: leaveRequest.userId,
-          type: 'leave_application',
+          type: 'leave_request',
           title: 'Leave Request Submitted',
           message: `Your leave request from ${new Date(leaveRequest.startDate).toLocaleDateString()} to ${new Date(leaveRequest.endDate).toLocaleDateString()} has been submitted and is pending approval.`,
           isRead: false,
           relatedLeaveId: leaveRequest.id
         });
+        
+        // Notify admins about new leave request
+        const adminUsers = await storage.getAdminUsers();
+        const employee = await storage.getUser(leaveRequest.userId);
+        for (const admin of adminUsers) {
+          await storage.createNotification({
+            userId: admin.id,
+            type: 'leave_request',
+            title: 'New Leave Request',
+            message: `${employee?.firstName} ${employee?.lastName} has submitted a leave request from ${new Date(leaveRequest.startDate).toLocaleDateString()} to ${new Date(leaveRequest.endDate).toLocaleDateString()} for ${leaveRequest.type} leave.`,
+            isRead: false,
+            relatedLeaveId: leaveRequest.id,
+            relatedUserId: leaveRequest.userId
+          });
+        }
       } catch (notificationError) {
         console.error('Failed to create leave request notification:', notificationError);
       }
@@ -493,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
           await storage.createNotification({
             userId: leaveRequest.userId,
-            type: data.status === 'approved' ? 'leave_approval' : 'leave_rejection',
+            type: data.status === 'approved' ? 'leave_approved' : 'leave_rejected',
             title: statusTitle,
             message: statusMessage,
             isRead: false,

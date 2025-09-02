@@ -1,0 +1,787 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { setupAuth } from "./auth";
+import { 
+  insertDepartmentSchema, 
+  insertAttendanceSchema, 
+  updateAttendanceSchema,
+  insertLeaveRequestSchema, 
+  insertHolidaySchema 
+} from "@shared/schema";
+import { z } from "zod";
+import crypto from "crypto";
+import { promisify } from "util";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication routes
+  setupAuth(app);
+
+  // Department routes
+  app.get("/api/departments", async (req, res, next) => {
+    try {
+      const departments = await storage.getDepartments();
+      res.json(departments);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/departments/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const department = await storage.getDepartment(id);
+      
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      res.json(department);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/departments", async (req, res, next) => {
+    try {
+      const validatedData = insertDepartmentSchema.parse(req.body);
+      const department = await storage.createDepartment(validatedData);
+      res.status(201).json(department);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  app.put("/api/departments/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertDepartmentSchema.partial().parse(req.body);
+      const department = await storage.updateDepartment(id, validatedData);
+      
+      if (!department) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      res.json(department);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  app.delete("/api/departments/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteDepartment(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Department not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Employee/User routes
+  app.get("/api/employees", async (req, res, next) => {
+    try {
+      const users = await storage.getUsers();
+      // Don't expose passwords in response
+      const usersWithoutPasswords = users.map(({ password, ...user }) => user);
+      res.json(usersWithoutPasswords);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/employees/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const user = await storage.getUser(id);
+      
+      if (!user) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      // Don't expose password
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/employees/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      // Password updates should be handled separately
+      const { password, ...updateData } = req.body;
+      
+      const user = await storage.updateUser(id, updateData);
+      
+      if (!user) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      // Don't expose password
+      const { password: userPassword, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/employees/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteUser(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Change password endpoint
+  app.put("/api/change-password", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current password and new password are required" });
+      }
+
+      const user = await storage.getUserByUsername(req.user.username);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if current password is correct using the same logic as authentication
+      let isCurrentPasswordValid = false;
+      
+      // First, check hardcoded credentials (for users still using default passwords)
+      if (
+        (user.username === 'admin' && currentPassword === 'admin123') ||
+        (user.username === 'hr' && currentPassword === 'hr123') ||
+        (user.username === 'manager' && currentPassword === 'manager123') ||
+        (user.username === 'employee' && currentPassword === 'employee123')
+      ) {
+        isCurrentPasswordValid = true;
+      } else {
+        // Otherwise, check against stored hashed password
+        try {
+          const scryptAsync = promisify(crypto.scrypt);
+          const [hash, salt] = user.password.split('.');
+          const keyBuffer = Buffer.from(hash, 'hex');
+          const derivedKey = (await scryptAsync(currentPassword, salt, 64)) as Buffer;
+          isCurrentPasswordValid = crypto.timingSafeEqual(keyBuffer, derivedKey);
+        } catch (error) {
+          console.error('Error verifying stored password:', error);
+          isCurrentPasswordValid = false;
+        }
+      }
+      
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+
+      // Hash new password
+      const scryptAsync = promisify(crypto.scrypt);
+      const newSalt = crypto.randomBytes(16).toString('hex');
+      const newHashBuffer = (await scryptAsync(newPassword, newSalt, 64)) as Buffer;
+      const newHashedPassword = newHashBuffer.toString('hex') + '.' + newSalt;
+
+      // Update password
+      await storage.updateUser(user.id, { password: newHashedPassword });
+
+      res.json({ message: "Password changed successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update user permissions endpoint
+  app.patch("/api/users/permissions", async (req, res, next) => {
+    try {
+      if (!req.user || req.user.role !== "admin") {
+        return res.status(403).json({ message: "Only admin users can modify permissions" });
+      }
+
+      const { userId, role, customPermissions } = req.body;
+      
+      if (!userId || !role) {
+        return res.status(400).json({ message: "userId and role are required" });
+      }
+
+      const updatedUser = await storage.updateUser(userId, {
+        role,
+        customPermissions: customPermissions || []
+      });
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Don't expose password
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/departments/:departmentId/employees", async (req, res, next) => {
+    try {
+      const departmentId = parseInt(req.params.departmentId);
+      const employees = await storage.getUsersByDepartment(departmentId);
+      
+      // Don't expose passwords
+      const employeesWithoutPasswords = employees.map(({ password, ...employee }) => employee);
+      res.json(employeesWithoutPasswords);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Attendance routes
+  app.get("/api/attendance", async (req, res, next) => {
+    try {
+      const { userId, date } = req.query;
+      
+      if (userId) {
+        const records = await storage.getAttendanceByUser(parseInt(userId as string));
+        return res.json(records);
+      }
+      
+      if (date) {
+        const records = await storage.getAttendanceByDate(new Date(date as string));
+        return res.json(records);
+      }
+      
+      res.status(400).json({ message: "Missing query parameters: userId or date required" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/attendance", async (req, res, next) => {
+    try {
+      const validatedData = insertAttendanceSchema.parse(req.body);
+      const attendance = await storage.createAttendance(validatedData);
+      res.status(201).json(attendance);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  app.put("/api/attendance/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      console.log("=== ATTENDANCE UPDATE DEBUG ===");
+      console.log("ID:", id);
+      console.log("Raw body:", JSON.stringify(req.body, null, 2));
+      console.log("Body type:", typeof req.body);
+      console.log("Keys in body:", Object.keys(req.body));
+      
+      // Completely bypass any validation - just update directly
+      const result = await storage.updateAttendance(id, req.body);
+      
+      if (!result) {
+        console.log("No attendance record found with ID:", id);
+        return res.status(404).json({ message: "Attendance record not found" });
+      }
+      
+      console.log("Update successful:", result);
+      console.log("=== END DEBUG ===");
+      
+      res.json(result);
+    } catch (error) {
+      console.log("=== ERROR ===");
+      console.log("Error type:", typeof error);
+      console.log("Error constructor:", error?.constructor?.name);
+      console.log("Error message:", (error as any)?.message);
+      console.log("Full error:", error);
+      console.log("=== END ERROR ===");
+      
+      return res.status(500).json({ 
+        message: "Internal server error", 
+        error: (error as any)?.message || "Unknown error" 
+      });
+    }
+  });
+
+  app.post("/api/attendance/check-in", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const userId = req.user.id;
+      const now = new Date();
+      
+      // Check if user has already checked in today
+      const todayRecords = await storage.getAttendanceByDate(now);
+      const userTodayRecord = todayRecords.find(record => record.userId === userId);
+      
+      if (userTodayRecord && userTodayRecord.checkInTime) {
+        return res.status(400).json({ message: "Already checked in today" });
+      }
+      
+      const attendance = await storage.createAttendance({
+        userId,
+        checkInTime: now,
+        date: now,
+        status: 'present',
+        notes: ''
+      });
+      
+      res.status(201).json(attendance);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/attendance/check-out", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const userId = req.user.id;
+      const now = new Date();
+      
+      // Find today's check-in record
+      const todayRecords = await storage.getAttendanceByDate(now);
+      const userTodayRecord = todayRecords.find(record => record.userId === userId);
+      
+      if (!userTodayRecord) {
+        return res.status(404).json({ message: "No check-in record found for today" });
+      }
+      
+      if (userTodayRecord.checkOutTime) {
+        return res.status(400).json({ message: "Already checked out today" });
+      }
+      
+      const attendance = await storage.updateAttendance(userTodayRecord.id, {
+        checkOutTime: now
+      });
+      
+      res.json(attendance);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Leave request routes
+  app.get("/api/leave-requests", async (req, res, next) => {
+    try {
+      const { userId, status } = req.query;
+      
+      if (userId) {
+        const requests = await storage.getLeaveRequestsByUser(parseInt(userId as string));
+        return res.json(requests);
+      }
+      
+      if (status === 'pending') {
+        const requests = await storage.getPendingLeaveRequests();
+        return res.json(requests);
+      }
+      
+      // If no query params, return all requests (for admins/HR)
+      if (req.user && (req.user.role === 'admin' || req.user.role === 'hr')) {
+        const requests = await storage.getPendingLeaveRequests();
+        return res.json(requests);
+      }
+      
+      res.status(400).json({ message: "Missing query parameters or insufficient permissions" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/leave-requests", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Set userId from authenticated user if not specified and convert dates
+      const data = {
+        ...req.body,
+        userId: req.body.userId || req.user.id,
+        startDate: new Date(req.body.startDate),
+        endDate: new Date(req.body.endDate)
+      };
+      
+      const validatedData = insertLeaveRequestSchema.parse(data);
+      const leaveRequest = await storage.createLeaveRequest(validatedData);
+      
+      // Create notification for leave request submission
+      try {
+        await storage.createNotification({
+          userId: leaveRequest.userId,
+          type: 'leave_application',
+          title: 'Leave Request Submitted',
+          message: `Your leave request from ${new Date(leaveRequest.startDate).toLocaleDateString()} to ${new Date(leaveRequest.endDate).toLocaleDateString()} has been submitted and is pending approval.`,
+          isRead: false,
+          relatedLeaveId: leaveRequest.id
+        });
+      } catch (notificationError) {
+        console.error('Failed to create leave request notification:', notificationError);
+      }
+      
+      res.status(201).json(leaveRequest);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  app.put("/api/leave-requests/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Convert dates if they exist in the request body
+      const data = { ...req.body };
+      if (data.startDate) {
+        data.startDate = new Date(data.startDate);
+      }
+      if (data.endDate) {
+        data.endDate = new Date(data.endDate);
+      }
+      
+      // For approvals, set the approver ID
+      if (data.status === 'approved' && req.isAuthenticated()) {
+        data.approvedById = req.user.id;
+      }
+      
+      const validatedData = insertLeaveRequestSchema.partial().parse(data);
+      const leaveRequest = await storage.updateLeaveRequest(id, validatedData);
+      
+      if (!leaveRequest) {
+        return res.status(404).json({ message: "Leave request not found" });
+      }
+      
+      // Create notification for leave status updates
+      if (data.status && (data.status === 'approved' || data.status === 'rejected')) {
+        try {
+          const statusTitle = data.status === 'approved' ? 'Leave Request Approved' : 'Leave Request Rejected';
+          const statusMessage = data.status === 'approved' 
+            ? `Your leave request from ${new Date(leaveRequest.startDate).toLocaleDateString()} to ${new Date(leaveRequest.endDate).toLocaleDateString()} has been approved.`
+            : `Your leave request from ${new Date(leaveRequest.startDate).toLocaleDateString()} to ${new Date(leaveRequest.endDate).toLocaleDateString()} has been rejected.`;
+            
+          await storage.createNotification({
+            userId: leaveRequest.userId,
+            type: data.status === 'approved' ? 'leave_approval' : 'leave_rejection',
+            title: statusTitle,
+            message: statusMessage,
+            isRead: false,
+            relatedLeaveId: leaveRequest.id,
+            relatedUserId: req.user?.id
+          });
+        } catch (notificationError) {
+          console.error('Failed to create leave status notification:', notificationError);
+        }
+      }
+      
+      res.json(leaveRequest);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  // Holiday routes
+  app.get("/api/holidays", async (req, res, next) => {
+    try {
+      const holidays = await storage.getHolidays();
+      res.json(holidays);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/holidays", async (req, res, next) => {
+    try {
+      // Convert date string to Date object before validation
+      const bodyWithDateConversion = {
+        ...req.body,
+        date: new Date(req.body.date)
+      };
+      
+      const validatedData = insertHolidaySchema.parse(bodyWithDateConversion);
+      const holiday = await storage.createHoliday(validatedData);
+      res.status(201).json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  app.put("/api/holidays/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Convert date string to Date object before validation if date is provided
+      const bodyWithDateConversion = {
+        ...req.body,
+        ...(req.body.date && { date: new Date(req.body.date) })
+      };
+      
+      const validatedData = insertHolidaySchema.partial().parse(bodyWithDateConversion);
+      const holiday = await storage.updateHoliday(id, validatedData);
+      
+      if (!holiday) {
+        return res.status(404).json({ message: "Holiday not found" });
+      }
+      
+      res.json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  app.delete("/api/holidays/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteHoliday(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Holiday not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Reports routes
+  app.get("/api/reports/attendance", async (req, res, next) => {
+    try {
+      const { startDate, endDate, departmentId } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "startDate and endDate are required" });
+      }
+      
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      
+      // Get all attendance records
+      const allUsers = await storage.getUsers();
+      const allAttendance = [];
+      
+      // Filter users by department if specified
+      let users = allUsers;
+      if (departmentId) {
+        users = allUsers.filter(user => user.departmentId === parseInt(departmentId as string));
+      }
+      
+      // Build report data
+      for (const user of users) {
+        const userAttendance = await storage.getAttendanceByUser(user.id);
+        const filteredAttendance = userAttendance.filter(record => {
+          const recordDate = record.date ? new Date(record.date) : null;
+          return recordDate && recordDate >= start && recordDate <= end;
+        });
+        
+        if (filteredAttendance.length > 0) {
+          allAttendance.push({
+            user: { 
+              id: user.id, 
+              firstName: user.firstName, 
+              lastName: user.lastName,
+              position: user.position,
+              departmentId: user.departmentId
+            },
+            records: filteredAttendance
+          });
+        }
+      }
+      
+      res.json(allAttendance);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/leave", async (req, res, next) => {
+    try {
+      const { startDate, endDate, departmentId, status } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "startDate and endDate are required" });
+      }
+      
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      
+      // Get all users
+      const allUsers = await storage.getUsers();
+      const leaveReport = [];
+      
+      // Filter users by department if specified
+      let users = allUsers;
+      if (departmentId) {
+        users = allUsers.filter(user => user.departmentId === parseInt(departmentId as string));
+      }
+      
+      // Build report data
+      for (const user of users) {
+        const userLeaveRequests = await storage.getLeaveRequestsByUser(user.id);
+        
+        // Filter by date range and status if specified
+        let filteredRequests = userLeaveRequests.filter(request => {
+          const requestStart = new Date(request.startDate);
+          const requestEnd = new Date(request.endDate);
+          return (requestStart >= start && requestStart <= end) || 
+                 (requestEnd >= start && requestEnd <= end);
+        });
+        
+        if (status) {
+          filteredRequests = filteredRequests.filter(request => request.status === status);
+        }
+        
+        if (filteredRequests.length > 0) {
+          leaveReport.push({
+            user: { 
+              id: user.id, 
+              firstName: user.firstName, 
+              lastName: user.lastName,
+              position: user.position,
+              departmentId: user.departmentId
+            },
+            leaveRequests: filteredRequests
+          });
+        }
+      }
+      
+      res.json(leaveReport);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Notification routes
+  app.get("/api/notifications", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const notifications = await storage.getNotificationsByUser(req.user.id);
+      res.json(notifications);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/notifications/unread", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const unreadNotifications = await storage.getUnreadNotificationsByUser(req.user.id);
+      res.json(unreadNotifications);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/notifications", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const notification = await storage.createNotification(req.body);
+      res.status(201).json(notification);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/notifications/:id/read", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const id = parseInt(req.params.id);
+      const success = await storage.markNotificationAsRead(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+
+      res.json({ message: "Notification marked as read" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/notifications/read-all", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      await storage.markAllNotificationsAsRead(req.user.id);
+      res.json({ message: "All notifications marked as read" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/notifications/:id", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteNotification(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  const httpServer = createServer(app);
+  return httpServer;
+}

@@ -85,6 +85,18 @@ export function DataTable<TData, TValue>({
         }
       }
       
+      // For reports data with nested user object
+      let userFirstName = '';
+      let userLastName = '';
+      let userEmail = '';
+      let userPosition = '';
+      if (rowData?.user) {
+        userFirstName = rowData.user.firstName?.toLowerCase() || '';
+        userLastName = rowData.user.lastName?.toLowerCase() || '';
+        userEmail = rowData.user.email?.toLowerCase() || '';
+        userPosition = rowData.user.position?.toLowerCase() || '';
+      }
+      
       return firstName.includes(search) || 
              lastName.includes(search) || 
              email.includes(search) || 
@@ -94,7 +106,12 @@ export function DataTable<TData, TValue>({
              reason.includes(search) ||
              status.includes(search) ||
              employeeName.includes(search) ||
-             `${firstName} ${lastName}`.includes(search);
+             userFirstName.includes(search) ||
+             userLastName.includes(search) ||
+             userEmail.includes(search) ||
+             userPosition.includes(search) ||
+             `${firstName} ${lastName}`.includes(search) ||
+             `${userFirstName} ${userLastName}`.includes(search);
     },
     state: {
       sorting,

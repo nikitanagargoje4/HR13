@@ -39,6 +39,9 @@ import {
   Cell,
   Sector,
 } from "recharts";
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function ReportsPage() {
   const [location] = useLocation();
@@ -275,13 +278,126 @@ export default function ReportsPage() {
   ];
 
   // Handle export button click
-  const handleExport = () => {
+  const handleExport = (format: 'excel' | 'pdf' = 'excel') => {
     setIsExporting(true);
-    // Simulate export delay
-    setTimeout(() => {
+    
+    try {
+      if (format === 'excel') {
+        exportToExcel();
+      } else {
+        exportToPDF();
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
       setIsExporting(false);
-      // In a real implementation, you would generate a CSV/Excel file here
-    }, 1500);
+    }
+  };
+
+  // Export to Excel
+  const exportToExcel = () => {
+    const dataToExport = reportData.map(row => {
+      if (reportType === 'attendance') {
+        return {
+          'Employee Name': `${row.user.firstName} ${row.user.lastName}`,
+          'Department': getDepartmentName(row.user.departmentId),
+          'Present Days': row.records.filter(r => r.status === 'present').length,
+          'Total Days': row.records.length,
+          'Attendance Rate': row.records.length > 0 
+            ? `${((row.records.filter(r => r.status === 'present').length / row.records.length) * 100).toFixed(1)}%`
+            : '0%'
+        };
+      } else {
+        const approvedLeaves = row.leaveRequests.filter(r => r.status === 'approved');
+        const totalDays = approvedLeaves.reduce((sum, leave) => {
+          const start = new Date(leave.startDate);
+          const end = new Date(leave.endDate);
+          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          return sum + days;
+        }, 0);
+        
+        return {
+          'Employee Name': `${row.user.firstName} ${row.user.lastName}`,
+          'Department': getDepartmentName(row.user.departmentId),
+          'Annual Leave': row.leaveRequests.filter(r => r.type === 'annual' && r.status === 'approved').length,
+          'Sick Leave': row.leaveRequests.filter(r => r.type === 'sick' && r.status === 'approved').length,
+          'Unpaid Leave': row.leaveRequests.filter(r => r.type === 'unpaid' && r.status === 'approved').length,
+          'Total Days': totalDays
+        };
+      }
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, reportType === 'attendance' ? 'Attendance Report' : 'Leave Report');
+    
+    const fileName = `${reportType}_report_${format(dateRange.from, 'yyyy-MM-dd')}_to_${format(dateRange.to, 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    const title = reportType === 'attendance' ? 'Attendance Report' : 'Leave Report';
+    
+    // Add title
+    doc.setFontSize(18);
+    doc.text(title, 20, 20);
+    
+    // Add date range
+    doc.setFontSize(12);
+    doc.text(`Period: ${format(dateRange.from, 'MMM dd, yyyy')} - ${format(dateRange.to, 'MMM dd, yyyy')}`, 20, 35);
+    
+    // Prepare table data
+    const tableData = reportData.map(row => {
+      if (reportType === 'attendance') {
+        const presentDays = row.records.filter(r => r.status === 'present').length;
+        const attendanceRate = row.records.length > 0 
+          ? `${((presentDays / row.records.length) * 100).toFixed(1)}%`
+          : '0%';
+        
+        return [
+          `${row.user.firstName} ${row.user.lastName}`,
+          getDepartmentName(row.user.departmentId),
+          presentDays,
+          row.records.length,
+          attendanceRate
+        ];
+      } else {
+        const approvedLeaves = row.leaveRequests.filter(r => r.status === 'approved');
+        const totalDays = approvedLeaves.reduce((sum, leave) => {
+          const start = new Date(leave.startDate);
+          const end = new Date(leave.endDate);
+          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          return sum + days;
+        }, 0);
+        
+        return [
+          `${row.user.firstName} ${row.user.lastName}`,
+          getDepartmentName(row.user.departmentId),
+          row.leaveRequests.filter(r => r.type === 'annual' && r.status === 'approved').length,
+          row.leaveRequests.filter(r => r.type === 'sick' && r.status === 'approved').length,
+          row.leaveRequests.filter(r => r.type === 'unpaid' && r.status === 'approved').length,
+          totalDays
+        ];
+      }
+    });
+
+    const tableHeaders = reportType === 'attendance'
+      ? ['Employee Name', 'Department', 'Present Days', 'Total Days', 'Attendance Rate']
+      : ['Employee Name', 'Department', 'Annual Leave', 'Sick Leave', 'Unpaid Leave', 'Total Days'];
+
+    autoTable(doc, {
+      head: [tableHeaders],
+      body: tableData,
+      startY: 45,
+      theme: 'grid',
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [71, 85, 105] },
+    });
+    
+    const fileName = `${reportType}_report_${format(dateRange.from, 'yyyy-MM-dd')}_to_${format(dateRange.to, 'yyyy-MM-dd')}.pdf`;
+    doc.save(fileName);
   };
 
   // Prepare chart data based on report type
@@ -362,19 +478,33 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
             
-            {/* Export button */}
-            <Button
-              variant="outline"
-              onClick={handleExport}
-              disabled={isExporting || reportData.length === 0}
-            >
-              {isExporting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-4 w-4" />
-              )}
-              Export
-            </Button>
+            {/* Export button with dropdown */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleExport('excel')}
+                disabled={isExporting || reportData.length === 0}
+              >
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                Export Excel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleExport('pdf')}
+                disabled={isExporting || reportData.length === 0}
+              >
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                Export PDF
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -484,7 +614,7 @@ export default function ReportsPage() {
                   <DataTable
                     columns={reportType === "attendance" ? attendanceColumns : leaveColumns}
                     data={reportData}
-                    searchColumn={reportType === "attendance" ? "employeeName" : "employeeName"}
+                    globalFilter={true}
                     searchPlaceholder="Search by employee name..."
                   />
                 )}

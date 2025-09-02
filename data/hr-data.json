@@ -677,6 +677,17 @@
       "createdAt": "2025-09-02T09:56:56.618Z",
       "relatedUserId": null,
       "relatedLeaveId": null
+    },
+    {
+      "userId": 1,
+      "type": "login",
+      "title": "Successful Login",
+      "message": "You have successfully logged in at 9/2/2025, 10:40:05 AM",
+      "isRead": false,
+      "id": 20,
+      "createdAt": "2025-09-02T10:40:05.741Z",
+      "relatedUserId": null,
+      "relatedLeaveId": null
     }
   ],
   "currentUserId": 17,
@@ -684,5 +695,5 @@
   "currentAttendanceId": 13,
   "currentLeaveRequestId": 15,
   "currentHolidayId": 2,
-  "currentNotificationId": 20
+  "currentNotificationId": 21
 }
